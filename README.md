@@ -91,7 +91,7 @@ Le prompt complet est disponible dans [`prompt_final.txt`](./prompt_final.txt). 
 
 Le MCD a été réalisé avec l'outil **Looping** (fichier source : [`mcd.loo`](./mcd.loo)). Image exportée :
 
-!(./mcd.png)
+['MCD.png'](./MCD.png)
 
 ### Entités, identifiants et attributs
 
