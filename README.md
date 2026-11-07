@@ -135,5 +135,4 @@ Le MCD a été réalisé avec l'outil **Looping** (fichier source : [`mcd.loo`](
 - Les noms d'attributs sont uniques dans tout le modèle (suffixes `_client`, `_produit`, etc.).
 - Les 35 données du dictionnaire sont toutes présentes dans le MCD, et il n'y en a pas d'autres.
 
-  <img width="865" height="711" alt="image" src="https://github.com/user-attachments/assets/ffc0686c-2361-4a6a-b61c-15d9b5730aa4" />
 
