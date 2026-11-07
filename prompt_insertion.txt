@@ -1,0 +1,69 @@
+Donne les requêtes d'insertion permettant de remplir la base de données MySQL dont le modèle relationnel est le suivant :
+
+MARQUE(id_marque, nom_marque, pays_marque)
+Clé primaire : id_marque
+CATEGORIE(id_categorie, nom_categorie)
+Clé primaire : id_categorie
+CLIENT(id_client, nom_client, prenom_client, email_client, telephone_client, date_naissance_client)
+Clé primaire : id_client
+BOUTIQUE(id_boutique, nom_boutique, adresse_boutique, ville_boutique, telephone_boutique)
+Clé primaire : id_boutique
+PRODUIT(id_produit, prix_produit, volume_produit, nom_produit, description_produit, #id_categorie, #id_marque)
+Clé primaire : id_produit
+FIDELITE(id_fidelite, nombre_points_fidelite, date_inscription_fidelite, #id_client)
+Clé primaire : id_fidelite (id_client est unique : un client a au plus un compte fidélité)
+COMMANDE(id_commande, date_commande, mode_paiement, #id_client)
+Clé primaire : id_commande
+EMPLOYE(id_employe, nom_employe, prenom_employe, poste_employe, date_embauche, #subordonne, #id_boutique)
+Clé primaire : id_employe (subordonne fait référence à id_employe : c'est l'id du manager de l'employé, NULL pour le directeur général)
+LIGNE_COMMANDE(#id_commande, num_ligne, quantite, prix_unitaire, #id_produit)
+Clé primaire : (id_commande, num_ligne)
+RECOMMANDER(#id_employe, #id_client)
+Clé primaire : (id_employe, id_client)
+
+Les clés primaires correspondent aux id, sauf si autre chose est précisé (quand c'est un attribut composé). Les clés étrangères sont identifiées par les # et ont le même nom que les clés primaires auxquelles elles font référence (sauf subordonne, qui référence id_employe).
+
+Il doit y avoir : 13 lignes pour la table MARQUE, 43 lignes pour la table PRODUIT, 8 lignes pour la table BOUTIQUE, 25 lignes pour la table EMPLOYE, 50 lignes pour la table CLIENT dont au moins 45 ont passé au moins une commande (les autres sont de nouveaux clients sans commande), 35 lignes pour la table FIDELITE, au moins 120 lignes pour la table COMMANDE, au moins 300 lignes pour la table LIGNE_COMMANDE (1 à 5 lignes par commande) et 30 lignes pour la table RECOMMANDER.
+
+Les catégories sont au nombre de 3, dont voici les caractéristiques :
+- nom : Maquillage
+- nom : Parfum
+- nom : Soin
+
+Les marques doivent être de vraies marques de cosmétiques (Dior, Chanel, Lancôme, Yves Saint Laurent, Fenty Beauty, The Ordinary, etc.) avec leur vrai pays d'origine, plus la marque maison de l'entreprise : Sephora Collection (France), qui doit avoir 3 produits. Les produits doivent être cohérents avec leur marque et leur catégorie, avec un volume_produit sous la forme « 50 ml » ou « 30 g ». Les boutiques sont de vraies adresses dans des villes françaises variées.
+
+Hiérarchie des employés (25 au total) :
+- 1 directeur général (poste : Directeur général), rattaché à la boutique 1, sans manager (subordonne NULL). C'est le seul employé avec subordonne NULL.
+- 8 responsables de boutique (poste : Responsable de boutique), un par boutique, dont le manager est le directeur général.
+- 16 autres employés (postes : Conseiller beauté ou Caissier), dont le manager est le responsable de leur propre boutique.
+Un manager est embauché avant ses subordonnés. Un employé ne peut pas être son propre manager.
+
+Les clés étrangères doivent faire référence aux clés primaires existantes : donne les lignes en commençant par remplir les tables dans lesquelles il n'y a pas de clés étrangères (MARQUE, CATEGORIE, CLIENT, BOUTIQUE), puis les tables dans lesquelles les clés étrangères font référence à des clés primaires des tables déjà remplies (PRODUIT, FIDELITE, COMMANDE, EMPLOYE, puis LIGNE_COMMANDE et RECOMMANDER). Dans EMPLOYE, insère le directeur général en premier, puis les responsables, puis les autres employés.
+
+Les id sont des entiers consécutifs à partir de 1, écrits explicitement dans les INSERT. Dans LIGNE_COMMANDE, num_ligne commence à 1 pour chaque commande, prix_unitaire est égal à prix_produit du produit commandé, et un même produit n'apparaît qu'une fois par commande. Dans RECOMMANDER, seuls les employés de poste Conseiller beauté recommandent des produits à des clients. Les clients sont majeurs, nés entre 1960 et 2007. La date d'inscription à la fidélité est postérieure aux 18 ans du client. Les commandes sont datées entre 2024-01-01 et 2026-11-01. Les employés sont embauchés entre 2015-01-01 et 2026-06-30. Les e-mails sont tous différents. Aucune valeur NULL, sauf subordonne du directeur général.
+
+Les données doivent respecter les contraintes de validation suivantes :
+
+alter table CLIENT add constraint uq_client_email unique (email_client);
+alter table MARQUE add constraint uq_marque_nom unique (nom_marque);
+alter table CATEGORIE add constraint uq_categorie_nom unique (nom_categorie);
+alter table FIDELITE alter column nombre_points_fidelite set default 0;
+alter table COMMANDE alter column mode_paiement set default 'Carte bancaire';
+alter table FIDELITE add constraint chk_fidelite_points check (nombre_points_fidelite >= 0);
+alter table PRODUIT add constraint chk_produit_prix check (prix_produit > 0);
+alter table LIGNE_COMMANDE add constraint chk_ligne_prix check (prix_unitaire > 0);
+alter table LIGNE_COMMANDE add constraint chk_ligne_num check (num_ligne > 0);
+alter table CLIENT add constraint chk_client_naissance check (date_naissance_client >= '1900-01-01');
+alter table COMMANDE add constraint chk_commande_date check (date_commande >= '2000-01-01');
+alter table EMPLOYE add constraint chk_employe_embauche check (date_embauche >= '1990-01-01');
+alter table LIGNE_COMMANDE add constraint chk_ligne_quantite check (quantite between 1 and 50);
+alter table COMMANDE add constraint chk_commande_paiement check (mode_paiement in ('Carte bancaire', 'PayPal', 'Especes', 'Virement'));
+alter table CLIENT add constraint chk_client_telephone check (telephone_client regexp '^0[1-9][0-9]{8}$');
+alter table BOUTIQUE add constraint chk_boutique_telephone check (telephone_boutique regexp '^0[1-9][0-9]{8}$');
+alter table CLIENT add constraint chk_client_email check (email_client regexp '^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$');
+
+En particulier : téléphones sur 10 chiffres commençant par 0, sans espace ni point (ex : 0612345678) ; e-mails au format prenom.nom@domaine.fr ou prenom.nom@domaine.com ; prix_produit entre 5.00 et 250.00 ; mode_paiement uniquement parmi 'Carte bancaire', 'PayPal', 'Especes', 'Virement'.
+
+Assure-toi que les noms et prénoms des clients et des employés font référence à des origines variées et sont mixtes.
+
+Fournis l'ensemble sous la forme d'un script SQL unique, dans un seul bloc de code, qui commence par USE sephoraDB;, avec un commentaire avant chaque table, et une requête INSERT INTO par table avec la liste des colonnes écrite explicitement.
