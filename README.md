@@ -135,4 +135,7 @@ Le MCD a été réalisé avec l'outil **Looping** (fichier source : [`mcd.loo`](
 - Les noms d'attributs sont uniques dans tout le modèle (suffixes `_client`, `_produit`, etc.).
 - Les 35 données du dictionnaire sont toutes présentes dans le MCD, et il n'y en a pas d'autres.
 
+## MLD (généré par Looping à partir du MCD)
+
+![MLD du projet](./mld.png)
 
