@@ -101,8 +101,8 @@ Le MCD a été réalisé avec l'outil **Looping** (fichier source : [`mcd.loo`](
 | Fidelite | id_fidelite |nombre_points_fidelite date_inscription_fidelite |
 |  Commande | id_commande | date_commande, mode_paiement |
 | Ligne_commande (entité faible) | num_ligne (R) | quantite, prix_unitaire |
-| Produit | id_produit | nom_produit, description_produit, prix_produit, contenance_produit |
-| Marque | id_marque | nom_marque, pays_origine_marque |
+| Produit | id_produit | nom_produit, description_produit, prix_produit, volume_produit |
+| Marque | id_marque | nom_marque, pays_marque |
 | Categorie | id_categorie | nom_categorie |
 | Boutique | id_boutique | nom_boutique, adresse_boutique, ville_boutique, telephone_boutique |
 | Employe | id_employe | nom_employe, prenom_employe, poste_employe, date_embauche |
@@ -130,7 +130,7 @@ Le MCD a été réalisé avec l'outil **Looping** (fichier source : [`mcd.loo`](
 
 ### Vérification de la 3FN
 
-- Chaque attribut non-clé dépend uniquement et directement de la clé de son entité. Exemple : `pays_origine_marque` dépend de `id_marque`, pas de `id_produit`.
+- Chaque attribut non-clé dépend uniquement et directement de la clé de son entité. Exemple : `pays_marque` dépend de `id_marque`, pas de `id_produit`.
 - Aucun attribut calculable n'est stocké (le total d'une commande se calcule à partir de ses lignes).
 - Les noms d'attributs sont uniques dans tout le modèle (suffixes `_client`, `_produit`, etc.).
 - Les 35 données du dictionnaire sont toutes présentes dans le MCD, et il n'y en a pas d'autres.
@@ -182,6 +182,7 @@ Dans `EMPLOYE`, `subordonne` est facultatif (NULL pour le directeur général) e
 | `3_insertion.sql` | Script d'insertion généré par l'IA |
 | `4_interrogation.sql` | Requêtes d'interrogation du scénario |
 | `mld.png` | Image du MLD généré par Looping |
+| `plan1_naif.png`, `plan2_optimise.png` | Arbres relationnels de l'étude du plan d'exécution |
 
 Les scripts s'exécutent dans cet ordre : `1_creation.sql`, `2_contraintes.sql`, `3_insertion.sql`, `4_interrogation.sql`.
 
@@ -276,7 +277,129 @@ Les trois scripts s'exécutent à la suite sans erreur. Nombre de lignes obtenu 
 
 ### Scénario d'utilisation
 
+**Rôle :** Camille est responsable marketing de la chaîne de boutiques Sephora. Elle utilise la base de données pour mieux connaître les clients, les produits et les ventes.
+
+**Objectif :** préparer la campagne de fin d'année 2026. Camille veut savoir quels produits mettre en avant, quels clients cibler (en particulier les clients fidèles) et quelles marques et boutiques sont les plus performantes.
+
+**Données à extraire :**
+
+**1. Repérer les produits et les clients à cibler** (projections et sélections)
+- Les parfums à plus de 80 €, du plus cher au moins cher (produits phares pour les coffrets).
+- Les pays d'origine des marques, sans doublon.
+- Les clients dont l'e-mail est une adresse gmail (cible pour un e-mailing).
+- Les produits à prix intermédiaire, entre 30 € et 60 €.
+- Les commandes payées par PayPal ou par virement, de la plus récente à la plus ancienne.
+- Les clients nés après 1995 dont le prénom se termine par la lettre e (cible pour les réseaux sociaux).
+
+**2. Mesurer les performances** (fonctions d'agrégation, `GROUP BY`, `HAVING`)
+- Le chiffre d'affaires de chaque année.
+- Le nombre de commandes et le panier moyen pour chaque mode de paiement.
+- Le chiffre d'affaires par catégorie de produit.
+- Les marques dont au moins 50 unités ont été vendues.
+- Les boutiques qui emploient plus de 3 personnes.
+- Les statistiques du programme de fidélité (nombre de comptes, points moyens, minimum, maximum).
+- Les clients qui ont dépensé plus de 2000 € (clients VIP).
+
+**3. Croiser les informations** (jointures)
+- Les produits avec leur marque et leur catégorie.
+- Le détail des commandes d'octobre 2026 : client, produit, quantité.
+- Tous les clients avec leur compte de fidélité, s'ils en ont un.
+- Les employés avec le nom de leur manager.
+- Les clients qui n'ont jamais passé de commande.
+- Les conseillers beauté avec leur boutique et les clients à qui ils ont recommandé des produits.
+- Les produits de la marque Dior avec les quantités commandées (requête étudiée pour l'optimisation du plan d'exécution).
+
+**4. Affiner la cible** (requêtes imbriquées)
+- Les clients qui ont acheté au moins un produit Dior.
+- Les clients qui n'ont jamais acheté de produit de la marque maison Sephora Collection.
+- Les produits plus chers que tous les produits Dior.
+- Les commandes dont le montant dépasse le montant moyen d'une commande.
+- Les clients qui n'ont aucun compte de fidélité.
+- Les clients qui n'ont jamais reçu de recommandation d'un conseiller.
+- Les commandes passées par des clients ayant un compte de fidélité.
+
+### Requêtes d'interrogation (`4_interrogation.sql`)
+
+Chaque donnée du scénario correspond à une requête. Dans le fichier, chaque requête a en commentaire la donnée recherchée.
+
+| Type de requête | Requêtes | Nombre |
+|---|---|---|
+| Projections et sélections (`ORDER BY`, `DISTINCT`, `LIKE`, `IN`, `BETWEEN`) | Q1 à Q6 | 6 |
+| Fonctions d'agrégation (`GROUP BY`, `HAVING`) | Q7 à Q13 | 7 |
+| Jointures (internes, externes, multiples, auto-jointure) | Q14 à Q19 et Q27 | 7 |
+| Requêtes imbriquées (`IN`, `NOT IN`, `NOT EXISTS`, `ANY`, `ALL`) | Q20 à Q26 | 7 |
+
+Les 27 requêtes s'exécutent sans erreur. Exemple, les produits plus chers que tous les produits Dior (Q22) :
+
+```sql
+SELECT nom_produit, prix_produit
+FROM PRODUIT
+WHERE prix_produit > ALL (
+    SELECT p2.prix_produit
+    FROM PRODUIT p2
+    JOIN MARQUE m ON p2.id_marque = m.id_marque
+    WHERE m.nom_marque = 'Dior'
+)
+ORDER BY prix_produit DESC;
+```
 
 ### Étude du plan d'exécution d'une requête
 
+**Requête étudiée (Q27) :** les noms des produits Dior et les quantités commandées.
 
+```sql
+SELECT p.nom_produit, l.quantite
+FROM MARQUE m
+JOIN PRODUIT p ON m.id_marque = p.id_marque
+JOIN LIGNE_COMMANDE l ON p.id_produit = l.id_produit
+WHERE m.nom_marque = 'Dior';
+```
+
+Elle utilise 3 opérateurs de l'algèbre relationnelle : la sélection σ, la jointure ⋈ et la projection π.
+
+**Tailles des tables :** MARQUE 13 lignes, PRODUIT 43 lignes, LIGNE_COMMANDE 392 lignes. Dans la base, Dior correspond à 1 ligne de MARQUE, 5 produits et 47 lignes de commande.
+
+**Règles de calcul** (exercice 6 du TD3) :
+- une jointure entre deux tables de tailles n1 et n2 nécessite n1 × n2 instructions ;
+- une sélection ou une projection scanne toute la table de taille n : n instructions.
+
+#### Plan 1 : plan naïf (jointures d'abord, sélection à la fin)
+
+π nom_produit, quantite ( σ nom_marque = 'Dior' ( (MARQUE ⋈ PRODUIT) ⋈ LIGNE_COMMANDE ) )
+
+![Plan 1 : plan naïf](./plan1_naif.png)
+
+| Étape | Opération | Lignes en sortie | Instructions |
+|---|---|---|---|
+| 1 | MARQUE ⋈ PRODUIT | 43 | 13 × 43 = 559 |
+| 2 | (étape 1) ⋈ LIGNE_COMMANDE | 392 | 43 × 392 = 16 856 |
+| 3 | σ nom_marque = 'Dior' | 47 | 392 |
+| 4 | π nom_produit, quantite | 47 | 47 |
+| | **Total** | | **17 854** |
+
+#### Plan 2 : plan optimisé (sélection avant les jointures)
+
+π nom_produit, quantite ( ( σ nom_marque = 'Dior' (MARQUE) ⋈ PRODUIT ) ⋈ LIGNE_COMMANDE )
+
+![Plan 2 : plan optimisé](./plan2_optimise.png)
+
+| Étape | Opération | Lignes en sortie | Instructions |
+|---|---|---|---|
+| 1 | σ nom_marque = 'Dior' sur MARQUE | 1 | 13 |
+| 2 | (étape 1) ⋈ PRODUIT | 5 | 1 × 43 = 43 |
+| 3 | (étape 2) ⋈ LIGNE_COMMANDE | 47 | 5 × 392 = 1 960 |
+| 4 | π nom_produit, quantite | 47 | 47 |
+| | **Total** | | **2 063** |
+
+#### Comparaison et conclusion
+
+| Plan | Instructions |
+|---|---|
+| Plan 1 (naïf) | 17 854 |
+| Plan 2 (optimisé) | 2 063 |
+
+Le plan 2 est environ 8,7 fois moins coûteux. En faisant la sélection sur MARQUE avant les jointures, on passe de 13 lignes à 1 seule. La première jointure coûte alors 43 instructions au lieu de 559, et surtout la deuxième ne manipule plus que les 5 produits Dior (5 × 392 = 1 960) au lieu des 43 produits (43 × 392 = 16 856).
+
+Nous avons aussi testé une variante avec des projections avant les jointures : σ sur MARQUE (13) + π id_marque (1) + π sur PRODUIT (43) + jointure 1 × 43 (43) + π sur le résultat (5) + π sur LIGNE_COMMANDE (392) + jointure 5 × 392 (1 960) + π final (47) = **2 504 instructions**. C'est plus que les 2 063 du plan 2, car chaque projection parcourt sa table sans réduire le nombre de lignes. Avec les règles de calcul du cours, le plan 2 reste donc le meilleur.
+
+**Règle retenue :** il faut faire les sélections le plus tôt possible, pour réduire la taille des tables avant les jointures, qui sont les opérations les plus coûteuses.
