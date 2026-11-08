@@ -98,9 +98,9 @@ Le MCD a été réalisé avec l'outil **Looping** (fichier source : [`mcd.loo`](
 | Entité | Identifiant (souligné) | Autres attributs |
 |---|---|---|
 | Client | id_client | nom_client, prenom_client, email_client, telephone_client, date_naissance_client |
-| Fidelite | id_fidelite | points_fidelite, date_inscription_fidelite |
-| Commande | id_commande | date_commande, mode_paiement |
-| LigneCommande (entité faible) | num_ligne (R) | quantite, prix_unitaire |
+| Fidelite | id_fidelite |nombre_points_fidelite date_inscription_fidelite |
+|  Commande | id_commande | date_commande, mode_paiement |
+| Ligne_commande (entité faible) | num_ligne (R) | quantite, prix_unitaire |
 | Produit | id_produit | nom_produit, description_produit, prix_produit, contenance_produit |
 | Marque | id_marque | nom_marque, pays_origine_marque |
 | Categorie | id_categorie | nom_categorie |
@@ -113,13 +113,13 @@ Le MCD a été réalisé avec l'outil **Looping** (fichier source : [`mcd.loo`](
 |---|---|---|---|---|
 | Appartenir | Produit | 1,1 | Marque | 0,n |
 | Classer | Produit | 1,1 | Categorie | 0,n |
-| Concerner | LigneCommande | 1,1 | Produit | 0,n |
-| Contenir | LigneCommande | 1,1 (R) | Commande | 1,n |
+| Concerner | Ligne_commande | 1,1 | Produit | 0,n |
+| Contenir | Ligne_commande | 1,1 (R) | Commande | 1,n |
 | Passer | Commande | 1,1 | Client | 0,n |
-| Créer | Fidelite | 1,1 | Client | 0,1 |
+| Creer | Fidelite | 1,1 | Client | 0,1 |
 | Recommander | Employe | 0,n | Client | 0,n |
 | Employer | Employe | 1,1 | Boutique | 1,n |
-| Encadrer (récursive) | Employe (managé) | 0,1 | Employe (manager) | 0,n |
+| Encadrer (récursive) | Employe (rôle manager) | 0,1 | Employe (rôle subordonne) | 0,n |
 
 ### Éléments de modélisation avancée utilisés (2 requis, 2 fournis)
 
@@ -134,8 +134,98 @@ Le MCD a été réalisé avec l'outil **Looping** (fichier source : [`mcd.loo`](
 - Aucun attribut calculable n'est stocké (le total d'une commande se calcule à partir de ses lignes).
 - Les noms d'attributs sont uniques dans tout le modèle (suffixes `_client`, `_produit`, etc.).
 - Les 35 données du dictionnaire sont toutes présentes dans le MCD, et il n'y en a pas d'autres.
+Image du MCD final (fichier [`MCD.png`](./MCD.png)) :
 
 ## MLD (généré par Looping à partir du MCD)
+Règles de transformation appliquées pour passer du MCD au MLD :
 
-![MLD du projet](./mld.png)
+- Chaque entité devient une table, avec son identifiant comme clé primaire.
+- Une association qui a une cardinalité 1,1 d'un côté donne une clé étrangère dans la table de ce côté : `Produit` reçoit `id_marque` et `id_categorie`, `Commande` reçoit `id_client`, `Employe` reçoit `id_boutique`, `Fidelite` reçoit `id_client`.
+- La clé étrangère `id_client` de `Fidelite` est `UNIQUE` : un client a au plus un compte de fidélité.
+- L'entité faible `Ligne_commande` a une clé primaire composée (`id_commande`, `num_ligne`) et deux clés étrangères : `id_commande` et `id_produit`.
+- L'association n:n `Recommander` devient une table de liaison, avec la clé composée (`id_employe`, `id_client`).
+- L'association récursive `Encadrer` devient la clé étrangère `subordonne` dans `Employe`, qui référence `id_employe`. Cette colonne contient l'identifiant du manager de l'employé (NULL pour le directeur général).
 
+  MLD sous forme textuelle (clé primaire soulignée dans Looping, clés étrangères précédées de `#`) :
+
+- MARQUE = (id_marque INT, nom_marque VARCHAR(40), pays_marque VARCHAR(30))
+- CATEGORIE = (id_categorie INT, nom_categorie VARCHAR(30))
+- CLIENT = (id_client INT, nom_client VARCHAR(30), prenom_client VARCHAR(30), email_client VARCHAR(50), telephone_client VARCHAR(10), date_naissance_client DATE)
+- FIDELITE = (id_fidelite INT, nombre_points_fidelite INT, date_inscription_fidelite DATE, #id_client)
+- BOUTIQUE = (id_boutique INT, nom_boutique VARCHAR(40), adresse_boutique VARCHAR(80), ville_boutique VARCHAR(30), telephone_boutique VARCHAR(10))
+- PRODUIT = (id_produit INT, prix_produit DECIMAL(6,2), volume_produit VARCHAR(10), nom_produit VARCHAR(60), description_produit VARCHAR(255), #id_categorie, #id_marque)
+- COMMANDE = (id_commande INT, date_commande DATE, mode_paiement VARCHAR(20), #id_client)
+- EMPLOYE = (id_employe INT, nom_employe VARCHAR(30), prenom_employe VARCHAR(30), poste_employe VARCHAR(30), date_embauche DATE, #subordonne, #id_boutique)
+- LIGNE_COMMANDE = (#id_commande, num_ligne INT, quantite INT, prix_unitaire DECIMAL(6,2), #id_produit)
+- RECOMMANDER = (#id_employe, #id_client)
+
+Dans `EMPLOYE`, `subordonne` est facultatif (NULL pour le directeur général) et référence `id_employe`.
+
+Image du MLD (fichier [`mld.png`](./mld.png)) :
+# Partie 2 : MPD, données et interrogation
+
+## Contenu du dépôt (partie 2)
+
+| Fichier | Rôle |
+|---|---|
+| `1_creation.sql` | MPD : création du schéma `sephoraDB`, des tables, des clés et des règles de modification et suppression |
+| `2_contraintes.sql` | Contraintes de validation supplémentaires (formats, bornes, listes de valeurs) |
+| `prompt_insertion.txt` | Prompt envoyé à l'IA générative pour produire les données |
+| `3_insertion.sql` | Script d'insertion généré par l'IA |
+| `4_interrogation.sql` | Requêtes d'interrogation du scénario |
+| `mld.png` | Image du MLD généré par Looping |
+
+Les scripts s'exécutent dans cet ordre : `1_creation.sql`, `2_contraintes.sql`, `3_insertion.sql`, `4_interrogation.sql`.
+
+## MPD (`1_creation.sql`)
+
+Le MPD est écrit en SQL à partir du MLD (image [`mld.png`](./mld.png)) :
+
+![MLD](./mld.png)
+
+### Du MLD au MPD
+
+- **Schéma :** le script commence par `drop schema if exists sephoraDB;`, puis `create schema sephoraDB;` et `use sephoraDB;`. On peut donc le relancer autant de fois que nécessaire.
+- **Types :** ceux du dictionnaire de données (`INT`, `VARCHAR(n)`, `DECIMAL(6,2)`, `DATE`).
+- **Ordre de création :** d'abord les 4 tables sans clé étrangère (`MARQUE`, `CATEGORIE`, `CLIENT`, `BOUTIQUE`), puis `PRODUIT`, `FIDELITE`, `COMMANDE`, `EMPLOYE`, et enfin `LIGNE_COMMANDE` et `RECOMMANDER`, qui référencent les autres. Une clé étrangère ne peut référencer qu'une table qui existe déjà.
+- **Clés primaires :** `PRIMARY KEY` sur l'identifiant de chaque table. Les identifiants simples sont en `AUTO_INCREMENT`. `LIGNE_COMMANDE` et `RECOMMANDER` ont une clé composée. Dans `LIGNE_COMMANDE`, `num_ligne` n'est pas en `AUTO_INCREMENT` : MySQL l'interdit dans une clé composée, donc le numéro de ligne est donné dans l'insertion.
+- **`NOT NULL` :** toutes les colonnes sont obligatoires, sauf `poste_employe` et `date_embauche` (facultatifs) et `subordonne` (le directeur général n'a pas de manager). Une clé étrangère issue d'une cardinalité 1,1 est toujours `NOT NULL`.
+- **`UNIQUE(id_client)` dans `FIDELITE` :** un client a au plus un compte de fidélité.
+
+Exemple, la table `EMPLOYE`, qui contient l'association récursive `Encadrer` :
+
+```sql
+CREATE TABLE EMPLOYE(
+   id_employe INT AUTO_INCREMENT,
+   nom_employe VARCHAR(30) NOT NULL,
+   prenom_employe VARCHAR(30) NOT NULL,
+   poste_employe VARCHAR(30),
+   date_embauche DATE,
+   subordonne INT,
+   id_boutique INT NOT NULL,
+   PRIMARY KEY(id_employe),
+   FOREIGN KEY(subordonne) REFERENCES EMPLOYE(id_employe) ON UPDATE CASCADE ON DELETE SET NULL,
+   FOREIGN KEY(id_boutique) REFERENCES BOUTIQUE(id_boutique) ON UPDATE CASCADE ON DELETE CASCADE
+);
+```
+
+### Modification et suppression des enregistrements référencés
+
+Chaque clé étrangère a `ON UPDATE CASCADE` et un `ON DELETE`. Ainsi, modifier ou supprimer un enregistrement référencé ne déclenche pas d'erreur :
+
+| Table | Clé étrangère | Référence | ON UPDATE | ON DELETE |
+|---|---|---|---|---|
+| Fidelite | id_client | Client | CASCADE | CASCADE |
+| Produit | id_categorie | Categorie | CASCADE | CASCADE |
+| Produit | id_marque | Marque | CASCADE | CASCADE |
+| Commande | id_client | Client | CASCADE | CASCADE |
+| Employe | subordonne | Employe | CASCADE | SET NULL |
+| Employe | id_boutique | Boutique | CASCADE | CASCADE |
+| Ligne_commande | id_commande | Commande | CASCADE | CASCADE |
+| Ligne_commande | id_produit | Produit | CASCADE | CASCADE |
+| Recommander | id_employe | Employe | CASCADE | CASCADE |
+| Recommander | id_client | Client | CASCADE | CASCADE |
+
+- **`ON UPDATE CASCADE` :** si la clé primaire d'un enregistrement change, la valeur est mise à jour partout où elle est référencée.
+- **`ON DELETE CASCADE` :** une clé étrangère issue d'une cardinalité 1,1 est obligatoire, donc elle ne peut pas devenir `NULL`. Supprimer un enregistrement supprime ceux qui en dépendent. Exemples : supprimer un client supprime ses commandes, leurs lignes, son compte de fidélité et ses recommandations ; supprimer une commande supprime ses lignes, qui n'existent pas sans elle.
+- **`ON DELETE SET NULL` pour `subordonne` :** si un manager est supprimé, ses employés restent dans la base, simplement sans manager. C'est possible parce que cette colonne est facultative.
