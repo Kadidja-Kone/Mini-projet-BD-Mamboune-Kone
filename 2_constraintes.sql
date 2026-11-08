@@ -1,10 +1,8 @@
 use sephoraDB;
- 
 -- valeur sans doublon
 alter table CLIENT add constraint uq_client_email unique (email_client);
 alter table MARQUE add constraint uq_marque_nom unique (nom_marque);
 alter table CATEGORIE add constraint uq_categorie_nom unique (nom_categorie);
- 
 --  valeur par defaut si aucune valeur n'est donnee
 alter table FIDELITE alter column nombre_points_fidelite set default 0;
 alter table COMMANDE alter column mode_paiement set default 'Carte bancaire';
