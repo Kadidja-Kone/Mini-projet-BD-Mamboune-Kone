@@ -136,8 +136,13 @@ Le MCD a été réalisé avec l'outil **Looping** (fichier source : [`mcd.loo`](
 - Les 35 données du dictionnaire sont toutes présentes dans le MCD, et il n'y en a pas d'autres.
 Image du MCD final (fichier [`MCD.png`](./MCD.png)) :
 
-## MLD (généré par Looping à partir du MCD)
-Règles de transformation appliquées pour passer du MCD au MLD :
+## Étape 3 : MLD
+
+Le MLD a été généré par Looping à partir du MCD :
+
+![MLD du projet](./mld.png)
+
+### Règles de transformation appliquées
 
 - Chaque entité devient une table, avec son identifiant comme clé primaire.
 - Une association qui a une cardinalité 1,1 d'un côté donne une clé étrangère dans la table de ce côté : `Produit` reçoit `id_marque` et `id_categorie`, `Commande` reçoit `id_client`, `Employe` reçoit `id_boutique`, `Fidelite` reçoit `id_client`.
@@ -146,7 +151,9 @@ Règles de transformation appliquées pour passer du MCD au MLD :
 - L'association n:n `Recommander` devient une table de liaison, avec la clé composée (`id_employe`, `id_client`).
 - L'association récursive `Encadrer` devient la clé étrangère `subordonne` dans `Employe`, qui référence `id_employe`. Cette colonne contient l'identifiant du manager de l'employé (NULL pour le directeur général).
 
-  MLD sous forme textuelle (clé primaire soulignée dans Looping, clés étrangères précédées de `#`) :
+### MLD sous forme textuelle
+
+Les clés étrangères sont précédées de `#`.
 
 - MARQUE = (id_marque INT, nom_marque VARCHAR(40), pays_marque VARCHAR(30))
 - CATEGORIE = (id_categorie INT, nom_categorie VARCHAR(30))
@@ -161,7 +168,8 @@ Règles de transformation appliquées pour passer du MCD au MLD :
 
 Dans `EMPLOYE`, `subordonne` est facultatif (NULL pour le directeur général) et référence `id_employe`.
 
-Image du MLD (fichier [`mld.png`](./mld.png)) :
+---
+
 # Partie 2 : MPD, données et interrogation
 
 ## Contenu du dépôt (partie 2)
@@ -169,7 +177,7 @@ Image du MLD (fichier [`mld.png`](./mld.png)) :
 | Fichier | Rôle |
 |---|---|
 | `1_creation.sql` | MPD : création du schéma `sephoraDB`, des tables, des clés et des règles de modification et suppression |
-| `2_contraintes.sql` | Contraintes de validation supplémentaires (formats, bornes, listes de valeurs) |
+| `2_contraintes.sql` | Contraintes de validation supplémentaires |
 | `prompt_insertion.txt` | Prompt envoyé à l'IA générative pour produire les données |
 | `3_insertion.sql` | Script d'insertion généré par l'IA |
 | `4_interrogation.sql` | Requêtes d'interrogation du scénario |
@@ -177,19 +185,15 @@ Image du MLD (fichier [`mld.png`](./mld.png)) :
 
 Les scripts s'exécutent dans cet ordre : `1_creation.sql`, `2_contraintes.sql`, `3_insertion.sql`, `4_interrogation.sql`.
 
-## MPD (`1_creation.sql`)
+## Étape 3 : MPD
 
-Le MPD est écrit en SQL à partir du MLD (image [`mld.png`](./mld.png)) :
-
-![MLD](./mld.png)
-
-### Du MLD au MPD
+### Du MLD au MPD (`1_creation.sql`)
 
 - **Schéma :** le script commence par `drop schema if exists sephoraDB;`, puis `create schema sephoraDB;` et `use sephoraDB;`. On peut donc le relancer autant de fois que nécessaire.
 - **Types :** ceux du dictionnaire de données (`INT`, `VARCHAR(n)`, `DECIMAL(6,2)`, `DATE`).
-- **Ordre de création :** d'abord les 4 tables sans clé étrangère (`MARQUE`, `CATEGORIE`, `CLIENT`, `BOUTIQUE`), puis `PRODUIT`, `FIDELITE`, `COMMANDE`, `EMPLOYE`, et enfin `LIGNE_COMMANDE` et `RECOMMANDER`, qui référencent les autres. Une clé étrangère ne peut référencer qu'une table qui existe déjà.
+- **Ordre de création :** d'abord les 4 tables sans clé étrangère (`MARQUE`, `CATEGORIE`, `CLIENT`, `BOUTIQUE`), puis `PRODUIT`, `FIDELITE`, `COMMANDE`, `EMPLOYE`, et enfin `LIGNE_COMMANDE` et `RECOMMANDER`. Une clé étrangère ne peut référencer qu'une table qui existe déjà.
 - **Clés primaires :** `PRIMARY KEY` sur l'identifiant de chaque table. Les identifiants simples sont en `AUTO_INCREMENT`. `LIGNE_COMMANDE` et `RECOMMANDER` ont une clé composée. Dans `LIGNE_COMMANDE`, `num_ligne` n'est pas en `AUTO_INCREMENT` : MySQL l'interdit dans une clé composée, donc le numéro de ligne est donné dans l'insertion.
-- **`NOT NULL` :** toutes les colonnes sont obligatoires, sauf `poste_employe` et `date_embauche` (facultatifs) et `subordonne` (le directeur général n'a pas de manager). Une clé étrangère issue d'une cardinalité 1,1 est toujours `NOT NULL`.
+- **`NOT NULL` :** toutes les colonnes sont obligatoires, sauf `poste_employe`, `date_embauche` et `subordonne` (le directeur général n'a pas de manager). Une clé étrangère issue d'une cardinalité 1,1 est toujours `NOT NULL`.
 - **`UNIQUE(id_client)` dans `FIDELITE` :** un client a au plus un compte de fidélité.
 
 Exemple, la table `EMPLOYE`, qui contient l'association récursive `Encadrer` :
@@ -211,7 +215,7 @@ CREATE TABLE EMPLOYE(
 
 ### Modification et suppression des enregistrements référencés
 
-Chaque clé étrangère a `ON UPDATE CASCADE` et un `ON DELETE`. Ainsi, modifier ou supprimer un enregistrement référencé ne déclenche pas d'erreur :
+Chaque clé étrangère a `ON UPDATE CASCADE` et un `ON DELETE`. Modifier ou supprimer un enregistrement référencé ne déclenche donc pas d'erreur :
 
 | Table | Clé étrangère | Référence | ON UPDATE | ON DELETE |
 |---|---|---|---|---|
@@ -226,6 +230,53 @@ Chaque clé étrangère a `ON UPDATE CASCADE` et un `ON DELETE`. Ainsi, modifier
 | Recommander | id_employe | Employe | CASCADE | CASCADE |
 | Recommander | id_client | Client | CASCADE | CASCADE |
 
-- **`ON UPDATE CASCADE` :** si la clé primaire d'un enregistrement change, la valeur est mise à jour partout où elle est référencée.
-- **`ON DELETE CASCADE` :** une clé étrangère issue d'une cardinalité 1,1 est obligatoire, donc elle ne peut pas devenir `NULL`. Supprimer un enregistrement supprime ceux qui en dépendent. Exemples : supprimer un client supprime ses commandes, leurs lignes, son compte de fidélité et ses recommandations ; supprimer une commande supprime ses lignes, qui n'existent pas sans elle.
-- **`ON DELETE SET NULL` pour `subordonne` :** si un manager est supprimé, ses employés restent dans la base, simplement sans manager. C'est possible parce que cette colonne est facultative.
+- **`ON UPDATE CASCADE` :** si la clé primaire change, la valeur est mise à jour partout où elle est référencée.
+- **`ON DELETE CASCADE` :** une clé étrangère de cardinalité 1,1 est obligatoire, donc elle ne peut pas devenir `NULL`. Supprimer un client supprime ses commandes, leurs lignes, son compte de fidélité et ses recommandations. Supprimer une commande supprime ses lignes, qui n'existent pas sans elle.
+- **`ON DELETE SET NULL` pour `subordonne` :** si un manager est supprimé, ses employés restent dans la base, sans manager. C'est possible parce que cette colonne est facultative.
+
+### Contraintes de validation (`2_contraintes.sql`)
+
+Le fichier ajoute 17 contraintes avec `alter table ... add constraint` : 3 `UNIQUE`, 2 `DEFAULT` et 12 `CHECK`.
+
+| Type | Colonnes concernées | Règle |
+|---|---|---|
+| `UNIQUE` | email du client, nom de marque, nom de catégorie | pas de doublon |
+| `DEFAULT` | points de fidélité, mode de paiement | 0 point, « Carte bancaire » |
+| `CHECK` avec `>=` ou `>` | points, prix, numéro de ligne, dates | valeurs positives, dates minimales |
+| `CHECK` avec `BETWEEN` | quantité d'une ligne | entre 1 et 50 |
+| `CHECK` avec `IN` | mode de paiement | Carte bancaire, PayPal, Especes ou Virement |
+| `CHECK` avec `REGEXP` | téléphones, email | 10 chiffres commençant par 0, forme `xxx@yyy.zz` |
+
+Exemple : `alter table LIGNE_COMMANDE add constraint chk_ligne_quantite check (quantite between 1 and 50);`
+
+Une valeur qui ne respecte pas une contrainte est refusée et la ligne n'est pas insérée (par exemple un email sans `@`).
+
+## Étape 4 : Insertion des données
+
+Le prompt est dans [`prompt_insertion.txt`](./prompt_insertion.txt) et le script obtenu dans [`3_insertion.sql`](./3_insertion.sql).
+
+Éléments du prompt du TP1 conservés : le modèle relationnel avec les clés primaires et étrangères (notées `#`), le nombre de lignes voulu par table, les caractéristiques des catégories, la précision sur l'ordre de remplissage (tables sans clé étrangère d'abord), les contraintes à respecter et le format de sortie (script SQL unique qui commence par `USE sephoraDB;`). Éléments ajoutés pour notre base : la hiérarchie des employés (un directeur général sans manager, 8 responsables de boutique, 16 autres employés), la cohérence des produits avec leur marque, les dates plausibles et les contraintes de validation de `2_contraintes.sql`.
+
+Les trois scripts s'exécutent à la suite sans erreur. Nombre de lignes obtenu :
+
+| Table | Lignes |
+|---|---|
+| MARQUE | 13 |
+| CATEGORIE | 3 |
+| CLIENT | 50 |
+| FIDELITE | 35 |
+| BOUTIQUE | 8 |
+| PRODUIT | 43 |
+| COMMANDE | 130 |
+| EMPLOYE | 25 |
+| LIGNE_COMMANDE | 392 |
+| RECOMMANDER | 30 |
+
+## Étape 5 : Interrogation de la base
+
+### Scénario d'utilisation
+
+
+### Étude du plan d'exécution d'une requête
+
+
